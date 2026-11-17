@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>forest</title>
+  <meta name="description" content="Лес в капсуле.">
+  <meta property="og:title" content="forest">
+  <meta property="og:description" content="Лес в капсуле.">
+  <meta property="og:image" content="assets/keyframes/og.webp">
+  <meta name="theme-color" content="#04110b">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200..900&display=swap" rel="stylesheet">
+  <!-- критичные картинки качаем сразу (их забирает fetch → ImageBitmap, поэтому as="fetch") -->
+  <link rel="preload" as="fetch" href="assets/chain/L0.webp" crossorigin="anonymous">
+  <link rel="preload" as="fetch" href="assets/chain/H1.webp" crossorigin="anonymous">
+  <link rel="preload" as="fetch" href="assets/chain/L1.webp" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+      "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/+esm",
+      "gsap/ScrollTrigger": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/ScrollTrigger/+esm",
+      "lenis": "https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.mjs"
+    }
+  }
+  </script>
+  <!-- минифицированные модули качаем параллельно с разбором страницы -->
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/gsap@3.12.5/+esm" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/gsap@3.12.5/ScrollTrigger/+esm" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.mjs" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+</head>
+<body>
+  <canvas id="gl" aria-hidden="true"></canvas>
+
+  <!-- процедурные фильтры для типографики: параметры крутит js/kinetic.js (клонирует на каждую секцию) -->
+  <svg class="fx-defs" width="0" height="0" aria-hidden="true" focusable="false">
+    <defs>
+      <!-- вязкая смола / удар капли: шум + смещение + «гуи»-порог по альфе -->
+      <filter id="liquid-resin" x="-15%" y="-120%" width="130%" height="420%" color-interpolation-filters="sRGB">
+        <feTurbulence data-k="turb" type="fractalNoise" baseFrequency="0.009 0.05" numOctaves="2" seed="11" result="n"/>
+        <feDisplacementMap data-k="disp" in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G" result="d"/>
+        <feGaussianBlur data-k="blur" in="d" stdDeviation="0.6" result="b"/>
+        <feColorMatrix in="b" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -8"/>
+      </filter>
+      <!-- иней: высокочастотный шум режет альфу жёстким порогом, на гранях — циановое свечение -->
+      <filter id="frost-shatter" x="-12%" y="-30%" width="124%" height="160%" color-interpolation-filters="sRGB">
+        <feTurbulence data-k="turb" type="fractalNoise" baseFrequency="0.08" numOctaves="3" seed="4" result="n"/>
+        <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1 0 0 0 0" result="na"/>
+        <feComposite data-k="cut" in="SourceAlpha" in2="na" operator="arithmetic" k1="0" k2="1" k3="-1" k4="-1" result="m0"/>
+        <feComponentTransfer in="m0" result="mask"><feFuncA type="linear" slope="24" intercept="0"/></feComponentTransfer>
+        <feComposite in="SourceGraphic" in2="mask" operator="in" result="cut"/>
+        <feMorphology in="mask" operator="erode" radius="1.6" result="er"/>
+        <feComposite in="mask" in2="er" operator="out" result="edge0"/>
+        <feComposite in="edge0" in2="SourceAlpha" operator="in" result="edge"/>
+        <feFlood data-k="flood" flood-color="#8ff4ff" flood-opacity="1"/>
+        <feComposite in2="edge" operator="in" result="edgeC"/>
+        <feGaussianBlur in="edgeC" stdDeviation="3" result="glow"/>
+        <feMerge><feMergeNode in="glow"/><feMergeNode in="cut"/><feMergeNode in="edgeC"/></feMerge>
+      </filter>
+      <!-- толстое стекло: искажение + разнос каналов R / G / B -->
+      <filter id="glass-refract" x="-25%" y="-60%" width="150%" height="220%" color-interpolation-filters="sRGB">
+        <feTurbulence data-k="turb" type="fractalNoise" baseFrequency="0.004 0.03" numOctaves="2" seed="3" result="n"/>
+        <feDisplacementMap data-k="disp" in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G" result="d"/>
+        <feColorMatrix in="d" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="r"/>
+        <feOffset data-k="offR" in="r" dx="0" dy="0" result="ro"/>
+        <feColorMatrix in="d" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="g"/>
+        <feColorMatrix in="d" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="b"/>
+        <feOffset data-k="offB" in="b" dx="0" dy="0" result="bo"/>
+        <feBlend in="ro" in2="g" mode="screen" result="rg"/>
+        <feBlend in="rg" in2="bo" mode="screen"/>
+      </filter>
+      <!-- горизонтальный motion-blur для урагана в кроне -->
+      <filter id="wind-blur" x="-60%" y="-10%" width="220%" height="120%">
+        <feGaussianBlur data-k="blur" stdDeviation="0 0"/>
+      </filter>
+    </defs>
+  </svg>
+
+  <div class="loader" role="status" aria-live="polite"><div class="loader__pct">0</div></div>
+
+  <!-- шкала прохождения: раздел, линия с засечками разделов (кликабельны), проценты. заполняет js/kinetic.js -->
+  <nav class="progress" aria-label="прохождение">
+    <span class="progress__lbl">00 // CAPSULE</span>
+    <span class="progress__bar"><span class="progress__fill"></span></span>
+    <span class="progress__pct">0%</span>
+  </nav>
+
+  <main id="story">
+    <section class="sec hero"><div class="stick">
+      <h1>forest</h1>
+      <p class="manifesto"><span class="idx">00 // CAPSULE</span> весь лес — в одной капсуле</p>
+    </div></section>
+    <section class="sec glass"><div class="stick pos-l">
+      <h2>под стеклом</h2>
+      <p class="manifesto"><span class="idx">01 // DOME</span> под стеклом он всё ещё живой</p>
+    </div></section>
+    <section class="sec crown"><div class="stick pos-r">
+      <h2>крона</h2>
+      <p class="manifesto"><span class="idx">02 // CANOPY</span> крона шумит</p>
+    </div></section>
+    <section class="sec macro frost"><div class="stick pos-l">
+      <h2>иней</h2>
+      <p class="manifesto"><span class="idx">03 // FROST</span> иней лежит</p>
+    </div></section>
+    <section class="sec macro resin"><div class="stick pos-r">
+      <h2>смола</h2>
+      <p class="manifesto"><span class="idx">04 // RESIN</span> смола течёт</p>
+    </div></section>
+    <section class="sec macro drop"><div class="stick pos-l">
+      <h2>капля</h2>
+      <p class="manifesto"><span class="idx">05 // DROP</span> капля падает</p>
+    </div></section>
+    <section class="sec final"><div class="stick pos-c">
+      <h2>forest</h2>
+      <p class="manifesto"><span class="idx">06 // CORE</span> лес не может защитить себя&nbsp;сам</p>
+      <button class="exit" type="button" tabindex="-1"><span class="exit__idx">07 // EXIT</span><span class="exit__line" aria-hidden="true"></span><span class="exit__t">выйти из капсулы</span></button>
+    </div></section>
+  </main>
+
+  <noscript><style>.loader{display:none}</style></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

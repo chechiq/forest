@@ -1,0 +1,273 @@
+:root {
+  --bg: #04110b;
+  --ink: #f2f7ee;
+  --display: 'Unbounded', system-ui, sans-serif;
+  --gut: clamp(16px, 4vw, 56px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg); }
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--display);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  overflow-x: clip;   /* разорванные буквы улетают за край; clip, в отличие от hidden, не ломает sticky и не даёт свайпать вбок на iOS */
+}
+
+#gl {
+  position: fixed; inset: 0;
+  width: 100vw; height: 100vh; height: 100lvh;
+  display: block;
+  z-index: 0;
+  pointer-events: none;
+}
+.no-gl body { background: var(--bg) url(../assets/chain/L0.webp) center / contain fixed no-repeat; }
+
+/* svg-фильтры: не display:none, иначе url(#…) перестаёт работать */
+.fx-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+
+/* угольки финала */
+.embers.on { visibility: visible; }
+.embers { visibility: hidden; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 11; pointer-events: none; }
+
+/* лоадер: только цифра */
+.loader {
+  position: fixed; inset: 0; z-index: 50;
+  background: var(--bg);
+  display: grid; place-items: center;
+}
+.loader__pct {
+  font-family: var(--display); font-weight: 300;
+  font-size: 14px; letter-spacing: 0.3em; font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+
+/* секции: один заголовок на кадр */
+#story { position: relative; z-index: 10; }
+.sec { position: relative; height: 150vh; }
+.stick {
+  position: sticky; top: 0;
+  height: 100vh; height: 100svh;
+  display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start;
+  gap: clamp(14px, 2.6vh, 30px);
+  padding: 0 var(--gut) clamp(32px, 8vh, 96px);
+  transform-origin: 50% 70%;
+}
+.pos-r { align-items: flex-end; text-align: right; }
+.pos-c, .hero .stick { justify-content: center; align-items: center; text-align: center; padding-bottom: 0; }
+/* герой: надпись над куполом капсулы, чтобы крона внутри оставалась открытой */
+.hero .stick { justify-content: flex-start; padding-top: clamp(14px, 3.5vh, 48px); gap: clamp(8px, 1.4vh, 18px); }
+
+/* ---------- заголовки ---------- */
+h1, h2 {
+  --bw: 700;
+  font-family: var(--display); font-weight: var(--bw);
+  line-height: 0.9; letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+h1 { --bw: 800; font-size: clamp(70px, min(14.5vw, 23vh), 290px); }
+/* базовая линия, из-под которой поднимаются буквы героя: снизу запас под тень объёма, по бокам — под разрыв */
+.hero h1 { clip-path: inset(-60% -300% -16% -300%); }
+h2 { font-size: clamp(50px, 8vw, 150px); }
+.final h2 { font-size: clamp(78px, 16.5vw, 290px); }
+.final .manifesto { max-width: min(28em, 100%); }
+
+/* ---------- манифест ---------- */
+.manifesto {
+  --bw: 300;
+  font-family: var(--display);
+  font-size: clamp(19px, 2.35vw, 38px); line-height: 1.12;
+  letter-spacing: -0.01em;
+  max-width: min(19em, 100%);
+  color: rgba(236, 248, 242, 0.92);
+}
+.idx {
+  display: block;
+  font-family: var(--display); font-weight: 300; font-size: 10px; line-height: 1;
+  letter-spacing: 0.22em;
+  color: rgba(110, 231, 183, 0.55);
+  margin-bottom: clamp(10px, 1.4vh, 16px);
+}
+
+/* ---------- разбивка: слово → .cw (мышь) → .char (эффект секции) → .gb + две половинки ---------- */
+.word { display: inline-block; white-space: nowrap; }
+.cw { display: inline-block; position: relative; }
+.char {
+  display: inline-block; position: relative;
+  transform-origin: 50% 55%;
+  /* жирность считает js (база → волна → курсор, ступень 20) и пишет в --w */
+  font-weight: var(--w, var(--bw));
+}
+/* невидимая основа держит размер буквы; у заголовков на ней же тени объёма */
+.gb { color: transparent; }
+/* объём заголовков: экструзия стопкой теней на невидимой основе (.gb лежит ПОД половинками,
+   поэтому тени не перекрывают градиентную заливку). направление (--ex, --ey) ведёт js от параллакса:
+   мышь + медленный дрейф сцены + скорость скролла. 12 слоёв ≈ 0.11em глубины */
+h1, h2 { --ex: 0; --ey: 0.45; --x1: #7fa697; --x2: #0d241b; }
+.frost h2 { --x1: #8fd6e2; --x2: #08242f; }
+.resin h2 { --x1: #b5560b; --x2: #260d02; }
+.drop h2 { --x1: #72b6bf; --x2: #0a252b; }
+.final h2 { --x1: #d9582a; --x2: #330812; }
+h1 .gb, h2 .gb {
+  text-shadow:
+    calc(var(--ex) * 0.0092em) calc(var(--ey) * 0.0092em) 0 color-mix(in srgb, var(--x2) 0%, var(--x1)),
+    calc(var(--ex) * 0.0184em) calc(var(--ey) * 0.0184em) 0 color-mix(in srgb, var(--x2) 9%, var(--x1)),
+    calc(var(--ex) * 0.0276em) calc(var(--ey) * 0.0276em) 0 color-mix(in srgb, var(--x2) 18%, var(--x1)),
+    calc(var(--ex) * 0.0368em) calc(var(--ey) * 0.0368em) 0 color-mix(in srgb, var(--x2) 27%, var(--x1)),
+    calc(var(--ex) * 0.0460em) calc(var(--ey) * 0.0460em) 0 color-mix(in srgb, var(--x2) 36%, var(--x1)),
+    calc(var(--ex) * 0.0552em) calc(var(--ey) * 0.0552em) 0 color-mix(in srgb, var(--x2) 45%, var(--x1)),
+    calc(var(--ex) * 0.0644em) calc(var(--ey) * 0.0644em) 0 color-mix(in srgb, var(--x2) 55%, var(--x1)),
+    calc(var(--ex) * 0.0736em) calc(var(--ey) * 0.0736em) 0 color-mix(in srgb, var(--x2) 64%, var(--x1)),
+    calc(var(--ex) * 0.0828em) calc(var(--ey) * 0.0828em) 0 color-mix(in srgb, var(--x2) 73%, var(--x1)),
+    calc(var(--ex) * 0.0920em) calc(var(--ey) * 0.0920em) 0 color-mix(in srgb, var(--x2) 82%, var(--x1)),
+    calc(var(--ex) * 0.1012em) calc(var(--ey) * 0.1012em) 0 color-mix(in srgb, var(--x2) 91%, var(--x1)),
+    calc(var(--ex) * 0.1104em) calc(var(--ey) * 0.1104em) 0 color-mix(in srgb, var(--x2) 100%, var(--x1)),
+    calc(var(--ex) * 0.12em) calc(var(--ey) * 0.12em + 0.03em) 0.07em rgba(0, 0, 0, 0.42);
+}
+
+/* видимая буква = верхняя + нижняя половинки (их можно разорвать) */
+.hl { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+.ht { clip-path: polygon(-60% -80%, 160% -80%, 160% 52%, -60% 52%); }
+.hb { clip-path: polygon(-60% 52%, 160% 52%, 160% 200%, -60% 200%); }
+
+h1 .hl, h2 .hl {
+  background-image: linear-gradient(180deg, #ffffff 15%, #b4d1c5 100%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+}
+h1 .hl { background-image: linear-gradient(180deg, #ffffff 8%, #d9efe6 55%, #87b6a3 100%); }
+
+/* иней: холодный сплошной цвет + циановая вспышка */
+.frost h2 .hl { background: none; color: #effcff; -webkit-text-fill-color: currentColor; }
+.frost .hl {
+  text-shadow:
+    0 0 calc(var(--ice, 0) * 10px) rgba(140, 245, 255, calc(clamp(0, var(--ice, 0), 1) * 0.95)),
+    0 0 calc(var(--ice, 0) * 34px) rgba(60, 200, 255, calc(clamp(0, var(--ice, 0), 1) * 0.6));
+}
+.frost .char { transform-origin: 50% 50%; }
+
+/* смола: янтарь с бегущим бликом через всю строку */
+.resin .hl {
+  background-image: linear-gradient(100deg, #d0700f 0%, #f4a63c 24%, #ffd683 37%, #fffbea 45%, #ffd683 53%, #f4a63c 67%, #d0700f 100%);
+  background-size: var(--lw, 600px) 100%;
+  background-repeat: repeat-x;
+  background-position: calc(0px - var(--ox, 0px)) 0;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent;
+}
+.resin .char { transform-origin: 50% 0%; }
+/* блик катится сам: css-анимация трогает только половинки букв, а не всё дерево секции */
+.resin .stick.is-active .hl { animation: resin-sheen 9.09s linear infinite; }
+@keyframes resin-sheen {
+  from { background-position: calc(0px - var(--ox, 0px)) 0; }
+  to { background-position: calc(var(--lw, 600px) - var(--ox, 0px)) 0; }
+}
+
+/* капля: вода, точка опоры внизу (сплющивание при ударе) */
+.drop h2 .hl { background-image: linear-gradient(180deg, #ffffff 10%, #bfeef0 70%, #7cc7cf 100%); }
+.drop .char { transform-origin: 50% 100%; }
+
+/* финал: раскалённый металл */
+.final h2 .hl { background-image: linear-gradient(180deg, #fff8e8 8%, #ffd08a 40%, #ff8a2a 72%, #ff3d6e 100%); }
+.final .manifesto .hl {
+  color: #ffeedd;
+  text-shadow:
+    0 0 calc(var(--heat, 0) * 10px) rgba(255, 140, 50, calc(var(--heat, 0) * 0.9)),
+    0 0 calc(var(--heat, 0) * 30px) rgba(255, 50, 110, calc(var(--heat, 0) * 0.55));
+}
+
+/* кнопка выхода — в стиле меток разделов: «07 // EXIT ── выйти из капсулы», без рамки; opacity ведёт js */
+.exit {
+  margin-top: clamp(14px, 3vh, 34px);
+  display: inline-flex; align-items: center; gap: 14px;
+  background: none; border: 0; padding: 10px 4px; cursor: pointer;
+  font-family: var(--display); color: inherit;
+  opacity: 0; pointer-events: none;
+}
+.exit__idx { font-weight: 300; font-size: 10px; letter-spacing: 0.22em; color: rgba(255, 170, 120, 0.6); }
+.exit__line {
+  width: 34px; height: 1px; background: rgba(255, 190, 140, 0.45);
+  transform-origin: left center; transition: width .45s cubic-bezier(.2, .8, .2, 1), background .3s;
+}
+.exit__t {
+  font-weight: 300; font-size: clamp(12px, 1.05vw, 15px); letter-spacing: 0.04em;
+  color: rgba(255, 236, 222, 0.82); transition: color .3s, text-shadow .3s;
+}
+.exit:hover .exit__line, .exit:focus-visible .exit__line { width: 64px; background: rgba(255, 200, 150, 0.9); }
+.exit:hover .exit__t, .exit:focus-visible .exit__t { color: #fff6ec; text-shadow: 0 0 14px rgba(255, 130, 60, 0.55); }
+.exit:focus-visible { outline: none; }
+
+/* шкала прохождения: справа сверху, в стиле меток разделов. появляется после лоадера */
+.progress {
+  position: fixed; z-index: 20; top: clamp(14px, 3vh, 30px); right: var(--gut);
+  display: flex; align-items: center; gap: 14px;
+  font-family: var(--display); font-weight: 300; font-size: 10px; letter-spacing: 0.22em; line-height: 1;
+  color: rgba(150, 240, 200, 0.8);
+  opacity: 0; transition: opacity .9s ease, color .6s ease;
+  -webkit-user-select: none; user-select: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);   /* читается и на светлых макро-кадрах */
+}
+.progress__bar::before, .progress__fill, .progress__tick::after { box-shadow: 0 0 6px rgba(0, 0, 0, 0.45); }
+.ready .progress { opacity: 1; }
+.exiting .progress { opacity: 0.55; }
+.progress__lbl { min-width: 12.5ch; text-align: right; }
+.progress__bar { position: relative; width: clamp(110px, 13vw, 210px); height: 13px; display: block; }
+.progress__bar::before, .progress__fill {
+  content: ''; position: absolute; left: 0; right: 0; top: 6px; height: 1px;
+}
+.progress__bar::before { background: rgba(200, 255, 230, 0.16); }
+.progress__fill { background: rgba(170, 255, 215, 0.85); transform-origin: left center; transform: scaleX(0); }
+/* засечки разделов: кликабельные, текущая ярче */
+.progress__tick {
+  position: absolute; top: 0; width: 13px; height: 13px; margin-left: -6px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+}
+.progress__tick::after {
+  content: ''; position: absolute; left: 6px; top: 3px; width: 1px; height: 7px;
+  background: rgba(200, 255, 230, 0.35); transition: background .3s, height .3s, top .3s;
+}
+.progress__tick.on::after { background: rgba(200, 255, 230, 0.95); height: 11px; top: 1px; }
+.progress__tick:hover::after { background: #fff; }
+.progress__pct { min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums; color: rgba(220, 255, 240, 0.85); }
+/* финал: шкала в тёплых тонах, как текст */
+.progress.warm { color: rgba(255, 170, 120, 0.65); }
+.progress.warm .progress__fill { background: rgba(255, 200, 150, 0.9); }
+.progress.warm .progress__pct { color: rgba(255, 230, 210, 0.9); }
+
+/* пока капсула высасывает назад — тексты гаснут, чтобы не мелькали секции */
+#story { transition: opacity .35s ease; }
+/* сцены — не текст для выделения: иначе удержание мыши в финале закрашивает буквы синим */
+.stick { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.exiting #story { opacity: 0; pointer-events: none; }
+
+/* will-change только на активной секции */
+.stick.is-active .char { will-change: transform, opacity; }
+/* герой и иней рвут буквы пополам: половинки и тени объёма — свои GPU-слои, разлёт и затухание без перерисовки */
+.hero .stick.is-active .hl, .frost .stick.is-active .hl,
+.hero .stick.is-active .gb, .frost .stick.is-active .gb { will-change: transform, opacity; }
+.hero .stick.is-active h1 { will-change: translate; }
+
+@media (max-width: 760px) {
+  .sec { height: 140vh; }
+  .pos-r { align-items: flex-start; text-align: left; }
+  .hero .stick { padding-top: max(46px, 6vh); }   /* сверху место под шкалу прохождения */
+  .progress { gap: 10px; font-size: 9px; letter-spacing: 0.16em; }
+  .progress__bar { width: 64px; }
+  .progress__lbl { min-width: 0; }
+  /* самое длинное слово «под стеклом» должно влезть в экран с полями */
+  h2 { font-size: min(11.6vw, 50px); }
+  .final h2 { font-size: clamp(64px, 19vw, 90px); }
+}
+
+/* reduced motion: без фильтров и сдвигов — только плавный fade */
+@media (prefers-reduced-motion: reduce) {
+  h1, h2, .manifesto { filter: none !important; }
+  .char { transform: none !important; clip-path: none !important; }
+  .hl { animation: none !important; }
+}
