@@ -271,3 +271,26 @@ h1 .hl { background-image: linear-gradient(180deg, #ffffff 8%, #d9efe6 55%, #87b
   .char { transform: none !important; clip-path: none !important; }
   .hl { animation: none !important; }
 }
+
+/* Stable large viewport for the canvas; renderer reads this exact CSS height.
+   Safari toolbar movement no longer stretches/reallocates the drawing buffer. */
+.mobile-lite #gl { height: 100lvh; }
+.mobile-lite .sec { height: 140svh; }
+.mobile-lite h1, .mobile-lite h2, .mobile-lite .manifesto {
+  filter: none; text-shadow: 0 2px 14px #04110b;
+}
+.mobile-lite .hero h1 { font-size: min(18vw, 90px); clip-path: none; }
+.mobile-lite .hero .stick { padding-top: max(62px, calc(env(safe-area-inset-top) + 44px)); }
+.mobile-lite .progress {
+  top: max(10px, env(safe-area-inset-top)); padding: 9px 10px;
+  background: rgba(4, 17, 11, .8); border-radius: 4px; gap: 8px;
+}
+.mobile-lite .progress__lbl { white-space: nowrap; }
+.mobile-lite .stick { padding-bottom: max(30px, env(safe-area-inset-bottom)); }
+.mobile-lite .hero .stick { padding-bottom: 0; }
+.mobile-lite .progress__bar { width: clamp(96px, 32vw, 126px); flex-shrink: 0; }
+.mobile-lite .progress__tick { width: 22px; height: 44px; top: -15px; margin-left: -11px; }
+.mobile-lite .progress__tick::after { left: 10px; top: 18px; }
+.mobile-lite .progress__tick.on::after { top: 16px; }
+.mobile-lite .exit { min-height: 44px; }
+.mobile-lite.no-gl #gl { display: none; }

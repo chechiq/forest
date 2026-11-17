@@ -145,7 +145,9 @@ vec3 frame(sampler2D tex, sampler2D dep, vec2 uv0, vec2 k, float asp, float fx, 
     float u = textureLod(dep, uvs - vec2(0.0, e), 0.0).r, d = textureLod(dep, uvs + vec2(0.0, e), 0.0).r;
     float rim = smoothstep(0.03, 0.1, length(vec2(r - l, d - u))) * step(min(min(l, r), min(u, d)), 0.2) * step(0.25, max(max(l, r), max(u, d)));
     rim *= 1.0 - smoothstep(0.82, 0.88, uvs.y);
-    float band = exp(-pow(uvs.y - (0.45 + 0.3 * sin(t * 0.35) + uPar.y * 0.12), 2.0) * 25.0);
+    // GLSL pow(x, 2.0) is undefined for negative x, including on Apple GPUs.
+    float bandDelta = uvs.y - (0.45 + 0.3 * sin(t * 0.35) + uPar.y * 0.12);
+    float band = exp(-bandDelta * bandDelta * 25.0);
     c += vec3(0.88, 1.0, 0.92) * rim * (0.08 + 0.3 * band) * sheen;
   }
 
@@ -345,7 +347,8 @@ void main(){
     p += d / max(l, 1e-3) / asp * f * 0.18 * (0.4 + z);
   }
   vec2 ds = (p - uShockPos) * asp; float ls = length(ds);
-  float ring = exp(-pow((ls - uShock * 1.6) * 5.0, 2.0)) * (1.0 - uShock) * (1.0 - uMacro);
+  float ringDelta = (ls - uShock * 1.6) * 5.0;
+  float ring = exp(-ringDelta * ringDelta) * (1.0 - uShock) * (1.0 - uMacro);
   p += ds / max(ls, 1e-3) / asp * ring * 0.15;
 
   gl_Position = vec4(p, 0.0, 1.0);

@@ -14,10 +14,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@200..900&display=swap" rel="stylesheet">
   <!-- критичные картинки качаем сразу (их забирает fetch → ImageBitmap, поэтому as="fetch") -->
-  <link rel="preload" as="fetch" href="assets/chain/L0.webp" crossorigin="anonymous">
-  <link rel="preload" as="fetch" href="assets/chain/H1.webp" crossorigin="anonymous">
-  <link rel="preload" as="fetch" href="assets/chain/L1.webp" crossorigin="anonymous">
-  <link rel="stylesheet" href="css/style.css">
+  <link media="(min-width: 761px) and (hover: hover)" rel="preload" as="fetch" href="assets/chain/L0.webp" crossorigin="anonymous">
+  <link media="(min-width: 761px) and (hover: hover)" rel="preload" as="fetch" href="assets/chain/L1.webp" crossorigin="anonymous">
+  <link rel="stylesheet" href="css/style.css?v=20261117-1">
   <script type="importmap">
   {
     "imports": {
@@ -124,6 +123,6 @@
   </main>
 
   <noscript><style>.loader{display:none}</style></noscript>
-  <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/main.js?v=20261117-1"></script>
 </body>
 </html>

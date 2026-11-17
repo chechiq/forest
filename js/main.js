@@ -2,8 +2,11 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
-import { quadVert, quadFrag, flowFrag, ptsVert, ptsFrag } from './shaders.js';
+import { quadVert, quadFrag, flowFrag, ptsVert, ptsFrag } from './shaders.js?v=20261117-1';
 import { initKinetic } from './kinetic.js';
+import { mobileFrag } from './mobile-shader.js';
+import { renderProfile } from './render-profile.js';
+import { initMobileType } from './mobile-type.js';
 
 gsap.registerPlugin(ScrollTrigger);
 if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
@@ -36,6 +39,16 @@ const CUT_RECT = [0.4958, 0.5049, 0.9875, 0.9875];   // где вырезанн�
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const touch = matchMedia('(hover: none)').matches;
+const { mobile, compatible } = renderProfile({
+  platform: navigator.platform || navigator.userAgent, width: innerWidth, touch,
+  forceCompatible: new URLSearchParams(location.search).has('compat'),
+});
+document.documentElement.dataset.renderProfile = mobile ? 'mobile' : compatible ? 'apple-compatible' : 'desktop';
+if (mobile) {
+  document.documentElement.classList.add('mobile-lite');
+  ScrollTrigger.config({ ignoreMobileResize: true });
+}
+let viewW = innerWidth, viewH = innerHeight;
 const isPortrait = () => innerWidth / innerHeight < 0.85;
 
 const O_SCAN = 1.08; // запас кадра под параллакс
@@ -53,8 +66,8 @@ try {
 }
 
 // бюджет пикселей: на огромных экранах не рендерим больше ~3 Мп
-const PIXEL_BUDGET = 3.2e6;
-const dprFor = (w, h) => Math.max(0.75, Math.min(devicePixelRatio, 1.5, Math.sqrt(PIXEL_BUDGET / (w * h))));
+const PIXEL_BUDGET = mobile ? 650000 : compatible ? 2e6 : 3.2e6;
+const dprFor = (w, h) => Math.max(0.75, Math.min(devicePixelRatio, mobile ? 1.25 : 1.5, Math.sqrt(PIXEL_BUDGET / (w * h))));
 let dprScale = 1;
 let dpr = dprFor(innerWidth, innerHeight);
 const scene = new THREE.Scene();
@@ -62,9 +75,10 @@ const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
 const quadMat = new THREE.ShaderMaterial({
   vertexShader: quadVert,
-  fragmentShader: quadFrag,
+  fragmentShader: compatible ? mobileFrag : quadFrag,
   depthTest: false, depthWrite: false,
   uniforms: {
+    uStudio: { value: compatible && !mobile ? 1 : 0 },
     tA: { value: null }, dA: { value: null }, tB: { value: null }, dB: { value: null },
     tFlow: { value: null },
     uAspA: { value: 1.5 }, uAspB: { value: 1.5 },
@@ -115,7 +129,7 @@ function updateFlow() {
 }
 
 // частицы
-const COUNT = touch ? 300 : 600;
+const COUNT = mobile ? 48 : compatible ? 160 : 600;
 const seeds = new Float32Array(COUNT * 4);
 for (let i = 0; i < seeds.length; i++) seeds[i] = Math.random();
 const ptsGeo = new THREE.BufferGeometry();
@@ -143,16 +157,16 @@ scene.add(points);
 // ---------- загрузка ----------
 const EMPTY = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1); EMPTY.needsUpdate = true;
 // декод картинок вне главного потока (ImageBitmap); flipY = false совпадает с ориентацией битмапа.
-// на телефонах ужимаем до 2048 по большей стороне: экран всё равно меньше, а 10 текстур 3072² съедают ~350 МБ видеопамяти
-const MAX_TEX = touch ? 2048 : 0;
+// Mobile assets are pre-sized: 1536px colour, 512px depth; no full-size decode on iOS.
+const MAX_TEX = mobile ? 1536 : 0;
 const canBitmap = typeof createImageBitmap === 'function';
 const texLoader = new THREE.TextureLoader();
 function setupTex(t) {
   t.flipY = false;
   t.colorSpace = THREE.NoColorSpace;
-  t.minFilter = THREE.LinearMipmapLinearFilter;
-  t.generateMipmaps = true;
-  if (renderer) t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  t.minFilter = compatible ? THREE.LinearFilter : THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = !compatible;
+  if (renderer && !compatible) t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   t.needsUpdate = true;
   return t;
 }
@@ -171,7 +185,7 @@ async function loadBitmap(url) {
   return t;
 }
 function loadTex(url) {
-  if (canBitmap) return loadBitmap(url).catch(() => loadImg(url));
+  if (canBitmap && !compatible) return loadBitmap(url).catch(() => loadImg(url));
   return loadImg(url);
 }
 function loadImg(url) {
@@ -183,11 +197,15 @@ function loadImg(url) {
 let chain = null;
 let loaded = 0;
 const elPct = document.querySelector('.loader__pct');
-const TOTAL = N * 2 + 2 + CHAIN.reduce((n, f) => n + (f.fg ? 2 : 0), 0);
+const TOTAL = compatible ? N * 2 + (mobile ? 0 : 1) : N * 2 + 2 + CHAIN.reduce((n, f) => n + (f.fg ? 2 : 0), 0);
 const tick1 = () => { loaded++; elPct.textContent = Math.min(100, Math.round((loaded / TOTAL) * 100)); };
 const counted = (p) => p.then((x) => (tick1(), x));
 
 function pathsFor(f) {
+  if (mobile) {
+    const name = f.file === 'final' ? (isPortrait() ? '06-final-m' : '06-final') : f.file;
+    return [`assets/mobile/${name}.webp`, `assets/mobile/${name}.depth.webp`];
+  }
   if (f.file === 'final') {
     const n = isPortrait() ? '06-final-m' : '06-final';
     return [`assets/keyframes/${n}.webp`, `assets/depth/${n}.depth.webp`];
@@ -199,14 +217,14 @@ async function loadFrame(f) {
   const [tex, dep, fgTex, fgDep] = await Promise.all([
     counted(loadTex(a)),
     counted(loadTex(b)),
-    f.fg ? counted(loadTex('assets/chain/' + f.fg[0] + '.webp')) : null,
-    f.fg ? counted(loadTex('assets/chain/depth/' + f.fg[0].slice(0, 2) + '.fgdepth.webp')) : null,
+    !compatible && f.fg ? counted(loadTex('assets/chain/' + f.fg[0] + '.webp')) : null,
+    !compatible && f.fg ? counted(loadTex('assets/chain/depth/' + f.fg[0].slice(0, 2) + '.fgdepth.webp')) : null,
   ]);
   return { ...f, tex, dep, fgTex, fgDep, asp: tex.image.width / tex.image.height };
 }
 
 // ---------- плавный скролл ----------
-const lenis = reduced ? null : new Lenis({ lerp: 0.085, smoothWheel: true, wheelMultiplier: 0.9 });
+const lenis = (reduced || mobile) ? null : new Lenis({ lerp: 0.085, smoothWheel: true, wheelMultiplier: 0.9 });
 if (lenis) lenis.on('scroll', ScrollTrigger.update);
 if (/[?&]debug(&|=|$)/.test(location.search)) window.__lenis = lenis;   // ?debug — доступ из консоли и бенчмарка
 
@@ -231,7 +249,7 @@ addEventListener('keydown', stopSnap);
 function scrollForG(g) { const i = Math.min(Math.floor(g), N - 2); return centers[i] + (g - i) * (centers[i + 1] - centers[i]); }
 const NOSNAP = /[?&]nosnap/.test(location.search);   // отладка: покадровые снимки без доводки
 function checkSnap(time) {
-  if (NOSNAP) return;
+  if (NOSNAP || mobile) return;
   const y = scrollY;
   if (Math.abs(y - snap.lastY) > 0.5) { snap.lastMove = time; snap.lastY = y; return; }
   if (snap.busy || snap.held || time - snap.lastMove < 0.18 || S.intro < 1) return;
@@ -263,12 +281,13 @@ const S = { g: 0, gs: 0, gPrev: 0, vel: 0, travel: 0, intro: 0, exitK: 0 };
 let frameTimes = [];
 
 // какая высота кадра видна, если кадр закрывает экран целиком (с запасом под параллакс)
-const coverH = (asp) => { const sa = innerWidth / innerHeight; return (sa > asp ? asp / sa : 1) / O_SCAN; };
+const coverH = (asp) => { const sa = viewW / viewH; return (sa > asp ? asp / sa : 1) / O_SCAN; };
 // капсула на старте: целиком по высоте экрана, по бокам студия
 const heroH = () => 1 / (isPortrait() ? 0.92 : 1.0);
 
 function resize() {
-  const w = innerWidth, h = innerHeight;
+  const w = innerWidth, h = mobile ? canvas.clientHeight : innerHeight;
+  viewW = w; viewH = h;
   dpr = dprFor(w, h) * dprScale;
   renderer.setPixelRatio(dpr);
   renderer.setSize(w, h, false);
@@ -279,7 +298,15 @@ function resize() {
   measure();
 }
 
+let lastMobileRender = -1;
+let statsStart = 0, statsFrames = 0;
 function tick(time, dtMs) {
+  if (mobile && document.hidden) return;
+  if (mobile) {
+    if (lastMobileRender >= 0 && time - lastMobileRender < 1 / 30 - .001) return;
+    dtMs = lastMobileRender < 0 ? 33.33 : (time - lastMobileRender) * 1000;
+    lastMobileRender = time;
+  }
   const dt = Math.min(dtMs / 1000, 0.05);
   if (lenis) lenis.raf(time * 1000);
   if (!chain) return;
@@ -372,7 +399,7 @@ function tick(time, dtMs) {
   fm.uMouse.value.set(fx, fy);
   fm.uVelocity.value.copy(flowVel).multiplyScalar(reduced ? 0.3 : 1);
   flowVel.multiplyScalar(0.9);
-  updateFlow();
+  if (!compatible) updateFlow();
 
   // частицы
   for (let j = 7; j > 0; j--) trail[j].copy(trail[j - 1]);
@@ -392,6 +419,14 @@ function tick(time, dtMs) {
   pu.uBright.value = (0.25 + 0.75 * smooth(G0 + 1.5, G0 + 3.5, gs)) * S.intro;
 
   renderer.render(scene, camera);
+  if (/[?&]debug(&|=|$)/.test(location.search)) {
+    statsFrames++;
+    if (time - statsStart >= 2) {
+      canvas.dataset.renderFps = (statsFrames / (time - statsStart)).toFixed(1);
+      canvas.dataset.textures = String(renderer.info.memory.textures);
+      statsStart = time; statsFrames = 0;
+    }
+  }
 
   // качество на лету: тормозит секунду подряд -> чуть меньше пикселей, летает -> возвращаем
   if (S.intro >= 1 && !document.hidden) {
@@ -399,8 +434,8 @@ function tick(time, dtMs) {
     if (frameTimes.length >= 60) {
       const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
       frameTimes = [];
-      if (avg > 20 && dprScale > 0.8) { dprScale = Math.max(0.8, dprScale - 0.1); resize(); }
-      else if (avg < 14 && dprScale < 1) { dprScale = Math.min(1, dprScale + 0.1); resize(); }
+      if (avg > (mobile ? 40 : 20) && dprScale > (mobile ? 0.7 : 0.8)) { dprScale = Math.max(mobile ? 0.7 : 0.8, dprScale - 0.1); resize(); }
+      else if (avg < (mobile ? 30 : 14) && dprScale < 1) { dprScale = Math.min(1, dprScale + 0.1); resize(); }
     }
   }
 }
@@ -443,22 +478,27 @@ async function start() {
   if (lenis) lenis.stop();
   resize();
   // типографика (вместе с заголовком forest) живёт в kinetic.js
-  const playIntro = initKinetic({ lenis, reduced, touch, onExit: exitCapsule });
+  const playIntro = (mobile ? initMobileType : initKinetic)({ lenis, reduced, touch, onExit: exitCapsule });
   const [set, studio, cutTex] = await Promise.all([
     Promise.all(CHAIN.map(loadFrame)),
-    loadTex('assets/chain/H2.webp').then((t) => (tick1(), t)),
-    loadTex('assets/chain/H1.webp').then((t) => (tick1(), t)),
+    mobile ? EMPTY : counted(loadTex(compatible ? 'assets/mobile/H2.webp' : 'assets/chain/H2.webp')),
+    compatible ? EMPTY : loadTex('assets/chain/H1.webp').then((t) => (tick1(), t)),
   ]);
   quadMat.uniforms.tStudio.value = studio;
   quadMat.uniforms.tCut.value = cutTex;
   chain = set;
-  if (window.__lenis) { window.__S = S; window.__U = quadMat.uniforms; }   // ?debug: замеры камеры
+  if (/[?&]debug(&|=|$)/.test(location.search)) { window.__S = S; window.__U = quadMat.uniforms; }   // ?debug: замеры камеры
   // всё заливаем в видеокарту заранее: иначе первая встреча с текстурой посреди скролла = подвисание
   [studio, cutTex, EMPTY, ...chain.flatMap((f) => [f.tex, f.dep, f.fgTex, f.fgDep])].forEach((t) => { if (t) renderer.initTexture(t); });
 
   gsap.ticker.add(tick);
   gsap.ticker.lagSmoothing(0);
-  addEventListener('resize', resize);
+  let resizePending = 0;
+  addEventListener('resize', () => {
+    if (mobile && innerWidth === viewW && canvas.clientHeight === viewH) { measure(); return; }
+    cancelAnimationFrame(resizePending);
+    resizePending = requestAnimationFrame(resize);
+  });
 
   const tl = gsap.timeline();
   tl.to('.loader', { opacity: 0, duration: 0.8, ease: 'power2.inOut', delay: 0.2 })
@@ -470,5 +510,10 @@ async function start() {
   S.g = S.gs = S.gPrev = scrollToG(scrollY);
 }
 
-if (renderer) start();
+if (renderer) start().catch((error) => {
+  console.error('Scene failed to load', error);
+  if (mobile) document.documentElement.classList.add('no-gl');
+  document.querySelector('.loader')?.remove();
+  if (lenis) lenis.start();
+});
 else document.querySelector('.loader').remove();
